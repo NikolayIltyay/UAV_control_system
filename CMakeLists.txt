@@ -41,6 +41,8 @@ file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/*.cpp
 )
 
+find_package(OpenCV REQUIRED)
+
 # ===== Executable =====
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
 
@@ -60,7 +62,7 @@ target_compile_definitions(${PROJECT_NAME}
 # ===== Libraries (add later) =====
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
-        # opencv_core
+        ${OpenCV_LIBS}
         # onnxruntime
 )
 
