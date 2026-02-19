@@ -1,81 +1,151 @@
-#include <opencv2/opencv.hpp>
 #include <iostream>
-#include <chrono>
+#include <vector>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <linux/videodev2.h>
+#include <opencv2/opencv.hpp>
 
-int main()
+struct Buffer {
+    void* start;
+    size_t length;
+};
+
+static void xioctl(int fd, unsigned long int request, void* arg)
 {
-    const int device_id = 0;
+    if (ioctl(fd, request, arg) == -1) {
+        perror("ioctl");
+        exit(EXIT_FAILURE);
+    }
+}
 
-    cv::VideoCapture cap(device_id, cv::CAP_V4L2);
-    if (!cap.isOpened())
-    {
-        std::cerr << "ERROR: Cannot open camera device " << device_id << std::endl;
-        return EXIT_FAILURE;
+int main(int argc, char** argv)
+{
+    const char* dev = (argc > 1) ? argv[1] : "/dev/video0";
+
+    int fd = open(dev, O_RDWR);
+    if (fd < 0) {
+        perror("open");
+        return 1;
     }
 
-    // Request MJPEG
-    if (!cap.set(cv::CAP_PROP_FOURCC,
-                 cv::VideoWriter::fourcc('M','J','P','G')))
+    // --------------------------------------------------
+    // Set format MJPEG 640x480
+    // --------------------------------------------------
+    v4l2_format fmt{};
+    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    fmt.fmt.pix.width = 1280;
+    fmt.fmt.pix.height = 720;
+    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+    fmt.fmt.pix.field = V4L2_FIELD_ANY;
+
+    xioctl(fd, VIDIOC_S_FMT, &fmt);
+
+    // --------------------------------------------------
+    // Request buffers
+    // --------------------------------------------------
+    v4l2_requestbuffers req{};
+    req.count = 4;
+    req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    req.memory = V4L2_MEMORY_MMAP;
+
+    xioctl(fd, VIDIOC_REQBUFS, &req);
+
+    std::vector<Buffer> buffers(req.count);
+
+    // --------------------------------------------------
+    // Map buffers
+    // --------------------------------------------------
+    for (unsigned i = 0; i < req.count; ++i)
     {
-        std::cerr << "WARNING: Failed to set MJPEG format" << std::endl;
+        v4l2_buffer buf{};
+        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.memory = V4L2_MEMORY_MMAP;
+        buf.index = i;
+
+        xioctl(fd, VIDIOC_QUERYBUF, &buf);
+
+        buffers[i].length = buf.length;
+        buffers[i].start = mmap(NULL, buf.length,
+                                PROT_READ | PROT_WRITE,
+                                MAP_SHARED,
+                                fd, buf.m.offset);
+
+        if (buffers[i].start == MAP_FAILED) {
+            perror("mmap");
+            return 1;
+        }
     }
 
-    // Set resolution
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 720);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
+    // --------------------------------------------------
+    // Queue buffers
+    // --------------------------------------------------
+    for (unsigned i = 0; i < buffers.size(); ++i)
+    {
+        v4l2_buffer buf{};
+        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.memory = V4L2_MEMORY_MMAP;
+        buf.index = i;
+        xioctl(fd, VIDIOC_QBUF, &buf);
+    }
 
-    // Set FPS (driver may ignore)
-    cap.set(cv::CAP_PROP_FPS, 30);
+    // --------------------------------------------------
+    // Start streaming
+    // --------------------------------------------------
+    v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    xioctl(fd, VIDIOC_STREAMON, &type);
 
-    std::cout << "Camera initialized." << std::endl;
+        // FPS counters
+    size_t frames = 0;
+    auto t0 = std::chrono::steady_clock::now();
 
-    cv::Mat frame;
-    int frame_count = 0;
-    auto start_time = std::chrono::steady_clock::now();
-
+    // --------------------------------------------------
+    // Capture loop
+    // --------------------------------------------------
     while (true)
     {
-        if (!cap.read(frame))
-        {
-            std::cerr << "ERROR: Failed to read frame from camera." << std::endl;
-            break;
-        }
+        v4l2_buffer buf{};
+        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.memory = V4L2_MEMORY_MMAP;
 
-        if (frame.empty())
-        {
-            std::cerr << "WARNING: Captured empty frame." << std::endl;
-            continue;
-        }
+        xioctl(fd, VIDIOC_DQBUF, &buf);
 
-        frame_count++;
+        // MJPEG -> decode to BGR using OpenCV
+        std::vector<uint8_t> jpeg(
+            (uint8_t*)buffers[buf.index].start,
+            (uint8_t*)buffers[buf.index].start + buf.bytesused
+        );
 
+        cv::Mat frame = cv::imdecode(jpeg, cv::IMREAD_COLOR);
+        if (!frame.empty())
+            cv::imshow("V4L2 Camera", frame);
 
-        if (frame_count == 30)
-        {
-            auto end_time = std::chrono::steady_clock::now();
-            double seconds =
-                std::chrono::duration<double>(end_time - start_time).count();
-
-            std::cout << "Measured FPS: "
-                      << frame_count / seconds << std::endl;
-
-            frame_count = 0;
-            start_time = std::chrono::steady_clock::now();
-        }
-
-
-        cv::imshow("Camera", frame);
-
-        // Exit on ESC
         if (cv::waitKey(1) == 27)
             break;
+
+        frames++;
+        auto t1 = std::chrono::steady_clock::now();
+        double sec = std::chrono::duration<double>(t1 - t0).count();
+        if (sec >= 1.0) {
+            std::cout << "FPS: " << frames / sec << std::endl;
+            frames = 0;
+            t0 = t1;
+        }
+
+        xioctl(fd, VIDIOC_QBUF, &buf);
     }
 
-    cap.release();
-    cv::destroyAllWindows();
+    // --------------------------------------------------
+    // Stop
+    // --------------------------------------------------
+    xioctl(fd, VIDIOC_STREAMOFF, &type);
 
-    std::cout << "Camera released. Exiting." << std::endl;
+    for (auto& b : buffers)
+        munmap(b.start, b.length);
 
-    return EXIT_SUCCESS;
+    close(fd);
+    return 0;
 }
 
