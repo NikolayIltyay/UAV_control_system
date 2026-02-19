@@ -46,6 +46,8 @@ find_package(OpenCV REQUIRED)
 # ===== Executable =====
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
 
+target_compile_definitions(UAV_control_system PRIVATE CAMERA_CAPTURE_BACKEND=V4L2)
+
 # ===== Include paths =====
 target_include_directories(${PROJECT_NAME}
     PRIVATE
