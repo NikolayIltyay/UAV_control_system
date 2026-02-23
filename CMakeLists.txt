@@ -52,6 +52,7 @@ target_compile_definitions(UAV_control_system PRIVATE CAMERA_CAPTURE_BACKEND=V4L
 target_include_directories(${PROJECT_NAME}
     PRIVATE
         ${PROJECT_INCLUDE_DIR}
+        ${PROJECT_SOURCE_DIR}/third_party/onnxruntime-linux-x64-1.17.1/include
 )
 
 # ===== Preprocessor definitions =====
@@ -61,11 +62,16 @@ target_compile_definitions(${PROJECT_NAME}
         $<$<CONFIG:Debug>:AP_DEBUG_BUILD>
 )
 
+target_link_directories(${PROJECT_NAME}
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/third_party/onnxruntime-linux-x64-1.17.1/lib
+    )
+
 # ===== Libraries (add later) =====
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         ${OpenCV_LIBS}
-        # onnxruntime
+        onnxruntime
 )
 
 # ===== Install =====
