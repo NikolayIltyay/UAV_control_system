@@ -8,7 +8,7 @@ namespace
 
     constexpr float SCORE_THRESHOLD = 0.4f;
     constexpr float IOU_THRESHOLD = 0.3f;
-    constexpr int64_t MAX_DETECTIONS = 10;
+    constexpr int64_t MAX_DETECTIONS = 2;
 
     void printModelInfo(const Ort::Session &session)
     {
@@ -74,11 +74,28 @@ std::vector<Detection> ONNXDetectionModel::getOutlines(const cv::Mat &image)
     int orig_w = image.cols;
     int orig_h = image.rows;
 
+    if (orig_w <= 0 || orig_h <= 0)
+    {
+        std::cout << "Invalid image size";
+        return {};
+    }
+
     // ---------------------------
     // Preprocess
     // ---------------------------
-    cv::Mat resized;
-    cv::resize(image, resized, cv::Size(MODEL_WIDTH, MODEL_HEIGHT));
+
+    int delta = orig_w / 2 - orig_h / 2;
+    int x_start = std::max(delta, 0);
+    int y_start = std::max(-delta, 0);
+
+    int minSide = std::min(orig_w, orig_h);
+
+    // Crop the image using ROI
+    cv::Rect roi(x_start, y_start, minSide, minSide);
+    cv::Mat resized = image;
+    resized = resized(roi);
+
+    cv::resize(resized, resized, cv::Size(MODEL_WIDTH, MODEL_HEIGHT));
     cv::cvtColor(resized, resized, cv::COLOR_BGR2RGB);
     resized.convertTo(resized, CV_32F, 1.0f / 255.0f);
 
@@ -188,26 +205,51 @@ std::vector<Detection> ONNXDetectionModel::getOutlines(const cv::Mat &image)
 
     std::vector<Detection> outlines;
 
+    auto getImageCoord = [output_data, &minSide](int i, int idxOffset, int offset)
+    {
+        int coord = static_cast<int>(output_data[idxOffset + i] * (float)minSide);
+        return std::max(0, std::min(minSide, coord)) + offset;
+    };
+
     for (int64_t i = 0; i < num_detections; ++i)
     {
-        int64_t offset = i * elements_per_detection;
+        int offset = static_cast<int>(i * elements_per_detection);
 
         float score = output_data[offset + 15];
 
         if (score < SCORE_THRESHOLD)
             continue;
 
-        int y1 = static_cast<int>(output_data[offset + 0] * (float)orig_h);
-        int x1 = static_cast<int>(output_data[offset + 1] * (float)orig_w);
-        int y2 = static_cast<int>(output_data[offset + 2] * (float)orig_h);
-        int x2 = static_cast<int>(output_data[offset + 3] * (float)orig_w);
+        int y1 = getImageCoord(0, offset, y_start);
+        int x1 = getImageCoord(1, offset, x_start);
+        int y2 = getImageCoord(2, offset, y_start);
+        int x2 = getImageCoord(3, offset, x_start);
 
-        x1 = std::max(0, std::min(orig_w, x1));
-        y1 = std::max(0, std::min(orig_h, y1));
-        x2 = std::max(0, std::min(orig_w, x2));
-        y2 = std::max(0, std::min(orig_h, y2));
+        int leftEye_x = getImageCoord(4, offset, x_start);
+        int leftEye_y = getImageCoord(5, offset, y_start);
 
-        outlines.emplace_back(Detection{cv::Rect(x1, y1, x2 - x1, y2 - y1), score});
+        int rightEye_x = getImageCoord(6, offset, x_start);
+        int rightEye_y = getImageCoord(7, offset, y_start);
+
+        int Nose_x = getImageCoord(8, offset, x_start);
+        int Nose_y = getImageCoord(9, offset, y_start);
+
+        int Mouth_x = getImageCoord(10, offset, x_start);
+        int Mouth_y = getImageCoord(11, offset, y_start);
+
+        int leftEar_x = getImageCoord(12, offset, x_start);
+        int leftEar_y = getImageCoord(13, offset, y_start);
+
+        int rightEar_x = getImageCoord(14, offset, x_start);
+        int rightEar_y = getImageCoord(15, offset, y_start);
+
+        outlines.emplace_back(Detection{cv::Rect(x1, y1, x2 - x1, y2 - y1),
+                                        cv::Point2i(leftEye_x, leftEye_y),
+                                        cv::Point2i(rightEye_x, rightEye_y),
+                                        cv::Point2i(Nose_x, Nose_y),
+                                        cv::Point2i(Mouth_x, Mouth_y),
+                                        cv::Point2i(leftEar_x, leftEar_y),
+                                        cv::Point2i(rightEar_x, rightEar_y)});
     }
 
     return outlines;

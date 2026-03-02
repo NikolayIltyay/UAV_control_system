@@ -6,7 +6,12 @@
 struct Detection
 {
     cv::Rect _rect;
-    float _score{0.0f};
+    cv::Point2i _leftEye;
+    cv::Point2i _rightEye;
+    cv::Point2i _nose;
+    cv::Point2i _mouth;
+    cv::Point2i _leftEar;
+    cv::Point2i _rightEar;
 };
 
 class iDetectionModelRT

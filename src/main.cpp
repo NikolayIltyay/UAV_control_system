@@ -25,6 +25,10 @@ int main(int argc, char **argv)
 
     FpsLogger fpsLog;
 
+    bool renderFrame= false;
+    bool renderDots = false;
+    bool renderTarget = true;
+
     while (true)
     {
         cv::Mat frame = capture->getFrame();
@@ -33,25 +37,39 @@ int main(int argc, char **argv)
 
         auto outlines = onnxRT.getOutlines(frame);
 
-        for (const auto& outline : outlines)
+        for (const auto &outline : outlines)
         {
+            if (renderFrame)
+                cv::rectangle(frame,
+                              outline._rect.tl(),
+                              outline._rect.br(),
+                              cv::Scalar(0, 255, 0),
+                              2);
 
-            cv::rectangle(frame,
-                          outline._rect.tl(),
-                          outline._rect.br(),
-                          cv::Scalar(0, 255, 0),
-                          2);
+            if (renderDots)
+            {
+                cv::circle(frame, outline._leftEye, 4, cv::Scalar(255, 0, 0), -1);
+                cv::circle(frame, outline._rightEye, 4, cv::Scalar(255, 0, 0), -1);
 
-            char text[32];
-            snprintf(text, sizeof(text), "%.2f", outline._score);
+                cv::circle(frame, outline._leftEar, 4, cv::Scalar(255, 0, 0), -1);
+                cv::circle(frame, outline._rightEar, 4, cv::Scalar(255, 0, 0), -1);
 
-            cv::putText(frame,
-                        text,
-                        cv::Point(outline._rect.tl().x, (outline._rect.tl().y - 5)),
-                        cv::FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        cv::Scalar(0, 255, 0),
-                        1);
+                cv::circle(frame, outline._mouth, 4, cv::Scalar(255, 0, 0), -1);
+                cv::circle(frame, outline._nose, 4, cv::Scalar(255, 0, 0), -1);
+            }
+
+            if (renderTarget)
+            {
+                auto centerPoint = (outline._leftEye + outline._rightEye) / 2;
+                auto segmentLength = frame.rows / 5;
+                cv::Point2i dX(segmentLength, 0);
+                cv::Point2i dY(0, segmentLength);
+
+                cv::line(frame, centerPoint - dY, centerPoint + dY, cv::Scalar(0, 0, 255), 2);
+                cv::line(frame, centerPoint - dX, centerPoint + dX, cv::Scalar(0, 0, 255), 2);
+                cv::circle(frame, centerPoint, segmentLength / 2, cv::Scalar(0, 0, 255), 2);
+                cv::circle(frame, centerPoint, segmentLength / 4, cv::Scalar(0, 0, 255), 2);
+            }
         }
 
         cv::imshow("Face Detection", frame);
