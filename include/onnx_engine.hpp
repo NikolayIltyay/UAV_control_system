@@ -14,6 +14,7 @@ public:
 private:
     Ort::Env env;
     Ort::SessionOptions session_options;
+    OrtCUDAProviderOptions cuda_options;
     std::unique_ptr<Ort::Session> session;
 
     std::vector<const char *> inputNames;

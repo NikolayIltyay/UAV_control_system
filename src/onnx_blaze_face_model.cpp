@@ -1,6 +1,8 @@
 #include "onnx_blaze_face_model.hpp"
 #include <iostream>
 
+#include "scope_time_logger.hpp"
+
 namespace
 {
     constexpr int MODEL_WIDTH = 128;
@@ -57,6 +59,7 @@ BlazeFaceModel::BlazeFaceModel(const std::string &modelPath)
 
 std::vector<Detection> BlazeFaceModel::infer(const cv::Mat &image)
 {
+    ScopeTimeLogger timeLogger("BlazeFaceModel::infer");
     int orig_w = image.cols;
     int orig_h = image.rows;
 

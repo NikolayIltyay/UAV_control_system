@@ -6,6 +6,8 @@
 #include <linux/videodev2.h>
 #include <opencv2/opencv.hpp>
 
+#include "scope_time_logger.hpp"
+
 CaptureCameraV4L2::CaptureCameraV4L2()
 {
 }
@@ -110,6 +112,7 @@ int CaptureCameraV4L2::startStreaming(const char *dev, unsigned int wdth, unsign
 
 cv::Mat CaptureCameraV4L2::getFrame()
 {
+    ScopeTimeLogger timeLogger("CaptureCameraV4L2::getFrame");
     v4l2_buffer buf{};
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
