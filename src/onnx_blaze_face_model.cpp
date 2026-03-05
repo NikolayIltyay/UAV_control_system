@@ -12,8 +12,47 @@ namespace
 }
 
 BlazeFaceModel::BlazeFaceModel(const std::string &modelPath)
-    : engine(modelPath)
+    : engine(modelPath),
+    memoryInfo(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault))
 {
+    const size_t imageSize = 128 * 128 * 3;
+
+    imageBuffer.resize(imageSize);
+
+    imageTensor = Ort::Value::CreateTensor<float>(
+        memoryInfo,
+        imageBuffer.data(),
+        imageBuffer.size(),
+        imageShape.data(),
+        imageShape.size());
+
+    scoreTensor = Ort::Value::CreateTensor<float>(
+        memoryInfo,
+        &score_threshold,
+        1,
+        scalarShape.data(),
+        scalarShape.size());
+
+    iouTensor = Ort::Value::CreateTensor<float>(
+        memoryInfo,
+        &iou_threshold,
+        1,
+        scalarShape.data(),
+        scalarShape.size());
+
+    maxTensor = Ort::Value::CreateTensor<int64_t>(
+        memoryInfo,
+        &max_detections,
+        1,
+        scalarShape.data(),
+        scalarShape.size());
+
+    inputTensors.reserve(4);
+
+    inputTensors.push_back(std::move(imageTensor));
+    inputTensors.push_back(std::move(scoreTensor));
+    inputTensors.push_back(std::move(maxTensor));
+    inputTensors.push_back(std::move(iouTensor));
 }
 
 std::vector<Detection> BlazeFaceModel::infer(const cv::Mat &image)
@@ -41,58 +80,13 @@ std::vector<Detection> BlazeFaceModel::infer(const cv::Mat &image)
     cv::cvtColor(resized, resized, cv::COLOR_BGR2RGB);
     resized.convertTo(resized, CV_32F, 1.0f / 255.0f);
 
-    std::vector<int64_t> input_shape = {1, MODEL_HEIGHT, MODEL_WIDTH, 3};
+    std::memcpy(
+        imageBuffer.data(),
+        resized.data,
+        imageBuffer.size() * sizeof(float));
 
-    std::vector<float> input_tensor_values(resized.total() * 3);
-    std::memcpy(input_tensor_values.data(),
-                resized.data,
-                input_tensor_values.size() * sizeof(float));
 
-    Ort::MemoryInfo memory_info =
-        Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-
-    Ort::Value image_tensor = Ort::Value::CreateTensor<float>(
-        memory_info,
-        input_tensor_values.data(),
-        input_tensor_values.size(),
-        input_shape.data(),
-        input_shape.size());
-
-    std::vector<int64_t> scalar_shape = {1};
-
-    float score_threshold = SCORE_THRESHOLD;
-    float iou_threshold = IOU_THRESHOLD;
-    int64_t max_detections = MAX_DETECTIONS;
-
-    Ort::Value score_tensor = Ort::Value::CreateTensor<float>(
-        memory_info,
-        &score_threshold,
-        1,
-        scalar_shape.data(),
-        scalar_shape.size());
-
-    Ort::Value iou_tensor = Ort::Value::CreateTensor<float>(
-        memory_info,
-        &iou_threshold,
-        1,
-        scalar_shape.data(),
-        scalar_shape.size());
-
-    Ort::Value max_det_tensor = Ort::Value::CreateTensor<int64_t>(
-        memory_info,
-        &max_detections,
-        1,
-        scalar_shape.data(),
-        scalar_shape.size());
-
-    std::vector<Ort::Value> input_tensors;
-
-    input_tensors.push_back(std::move(image_tensor));
-    input_tensors.push_back(std::move(score_tensor));
-    input_tensors.push_back(std::move(max_det_tensor));
-    input_tensors.push_back(std::move(iou_tensor));
-
-    auto output_tensors = engine.run(input_tensors);
+    auto output_tensors = engine.run(inputTensors);
 
     float *output_data =
         output_tensors[0].GetTensorMutableData<float>();
