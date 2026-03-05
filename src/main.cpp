@@ -3,15 +3,13 @@
 #include "fps_logger.hpp"
 #include "camera_capture_factory.hpp"
 #include "icamera_capture.hpp"
-#include "onnx_detection_model_rt.hpp"
+#include "onnx_blaze_face_model.hpp"
 
 
 
 int main(int argc, char **argv)
 {
-    ONNXDetectionModel onnxRT;
-    onnxRT.initialize("models/End-to-end-BlazeFace-Onnx/mpipe_bface_boxes_ops16.onnx");
-
+    BlazeFaceModel blazeModel("models/End-to-end-BlazeFace-Onnx/mpipe_bface_boxes_ops16.onnx");
 
     auto dev = (argc > 1) ? argv[1] : "/dev/video2";
 
@@ -35,7 +33,7 @@ int main(int argc, char **argv)
         if (frame.empty())
             continue;
 
-        auto outlines = onnxRT.getOutlines(frame);
+        auto outlines = blazeModel.infer(frame);
 
         for (const auto &outline : outlines)
         {

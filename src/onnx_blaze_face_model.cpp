@@ -1,4 +1,4 @@
-#include "onnx_detection_model_rt.hpp"
+#include "onnx_blaze_face_model.hpp"
 #include <iostream>
 
 namespace
@@ -9,67 +9,14 @@ namespace
     constexpr float SCORE_THRESHOLD = 0.4f;
     constexpr float IOU_THRESHOLD = 0.3f;
     constexpr int64_t MAX_DETECTIONS = 2;
-
-    void printModelInfo(const Ort::Session &session)
-    {
-        std::cout << "Number of inputs: " << session.GetInputCount() << std::endl;
-        Ort::AllocatorWithDefaultOptions allocator;
-
-        for (size_t i = 0; i < session.GetInputCount(); ++i)
-        {
-            auto name = session.GetInputNameAllocated(i, allocator);
-            auto type_info = session.GetInputTypeInfo(i);
-            auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
-            auto shape = tensor_info.GetShape();
-
-            std::cout << "Input " << i << ": " << name.get() << " Shape: ";
-            for (auto s : shape)
-                std::cout << s << " ";
-            std::cout << std::endl;
-        }
-    }
 }
 
-ONNXDetectionModel::~ONNXDetectionModel()
+BlazeFaceModel::BlazeFaceModel(const std::string &modelPath)
+    : engine(modelPath)
 {
 }
 
-int ONNXDetectionModel::initialize(const std::string &modelPath)
-{
-    // ---------------------------
-    // Initialize ONNX Runtime
-    // ---------------------------
-    Ort::SessionOptions session_options;
-    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-
-    _session = Ort::Session(
-        _env,
-        modelPath.c_str(),
-        session_options);
-
-    printModelInfo(_session);
-
-    auto inputCount = _session.GetInputCount();
-    auto outputCount = _session.GetOutputCount();
-
-    Ort::AllocatorWithDefaultOptions allocator;
-
-    for (decltype(inputCount) i = 0; i < inputCount; i++)
-    {
-        _inputNamesStore.emplace_back(_session.GetInputNameAllocated(i, allocator));
-        _inputNames.push_back(_inputNamesStore.back().get());
-    }
-
-    for (decltype(outputCount) i = 0; i < outputCount; i++)
-    {
-        _outputNamesStore.emplace_back(_session.GetOutputNameAllocated(i, allocator));
-        _outputNames.push_back(_outputNamesStore.back().get());
-    }
-
-    return 0;
-}
-
-std::vector<Detection> ONNXDetectionModel::getOutlines(const cv::Mat &image)
+std::vector<Detection> BlazeFaceModel::infer(const cv::Mat &image)
 {
     int orig_w = image.cols;
     int orig_h = image.rows;
@@ -80,17 +27,12 @@ std::vector<Detection> ONNXDetectionModel::getOutlines(const cv::Mat &image)
         return {};
     }
 
-    // ---------------------------
-    // Preprocess
-    // ---------------------------
-
     int delta = orig_w / 2 - orig_h / 2;
     int x_start = std::max(delta, 0);
     int y_start = std::max(-delta, 0);
 
     int minSide = std::min(orig_w, orig_h);
 
-    // Crop the image using ROI
     cv::Rect roi(x_start, y_start, minSide, minSide);
     cv::Mat resized = image;
     resized = resized(roi);
@@ -116,9 +58,6 @@ std::vector<Detection> ONNXDetectionModel::getOutlines(const cv::Mat &image)
         input_shape.data(),
         input_shape.size());
 
-    // ---------------------------
-    // Create scalar tensors
-    // ---------------------------
     std::vector<int64_t> scalar_shape = {1};
 
     float score_threshold = SCORE_THRESHOLD;
@@ -146,38 +85,24 @@ std::vector<Detection> ONNXDetectionModel::getOutlines(const cv::Mat &image)
         scalar_shape.data(),
         scalar_shape.size());
 
-    Ort::Value input_tensors[] = {
-        std::move(image_tensor),
-        std::move(score_tensor),
-        std::move(max_det_tensor),
-        std::move(iou_tensor)};
+    std::vector<Ort::Value> input_tensors;
 
-    Ort::RunOptions run_options;
+    input_tensors.push_back(std::move(image_tensor));
+    input_tensors.push_back(std::move(score_tensor));
+    input_tensors.push_back(std::move(max_det_tensor));
+    input_tensors.push_back(std::move(iou_tensor));
 
-    // ---------------------------
-    // Run Inference
-    // ---------------------------
-    auto output_tensors = _session.Run(
-        run_options,
-        _inputNames.data(),
-        input_tensors,
-        4,
-        _outputNames.data(),
-        1);
+    auto output_tensors = engine.run(input_tensors);
 
     float *output_data =
         output_tensors[0].GetTensorMutableData<float>();
 
-    // ---------------------------
-    // Draw detections (robust)
-    // ---------------------------
     auto output_info = output_tensors[0].GetTensorTypeAndShapeInfo();
     std::vector<int64_t> output_shape = output_info.GetShape();
 
     int64_t num_detections = 0;
     int64_t elements_per_detection = 16;
 
-    // Determine detection count
     if (output_shape.size() == 3)
     {
         // shape: [1, N, 16]
@@ -185,7 +110,7 @@ std::vector<Detection> ONNXDetectionModel::getOutlines(const cv::Mat &image)
     }
     else if (output_shape.size() == 2)
     {
-        // shape: [1, 16] OR [1, 0]
+        // shape: [1, 16]
         if (output_shape[1] == 16)
             num_detections = 1;
         else
