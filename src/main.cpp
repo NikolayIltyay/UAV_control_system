@@ -9,13 +9,20 @@
 
 int main(int argc, char **argv)
 {
-    BlazeFaceModel blazeModel("models/End-to-end-BlazeFace-Onnx/mpipe_bface_boxes_ops16.onnx");
+    const auto model = (argc > 2) ? argv[2] : nullptr;
+    if(!model)
+    {
+        std::cerr << "model is not specified" << std::endl;
+        return -1;
+    }
+    BlazeFaceModel blazeModel(model);
 
-    auto dev = (argc > 1) ? argv[1] : "/dev/video2";
-
+    auto dev = (argc > 1) ? argv[1] : "/dev/video0";
     auto capture = CameraCaptureFactory::getCameraCapture();
+    unsigned int width = 1280;
+    unsigned int height = 720;
 
-    if (capture->startStreaming(dev, 1280, 720, IMAGE_FORMAT::MJPEG))
+    if (capture->startStreaming(dev, width, height, IMAGE_FORMAT::MJPEG))
     {
         std::cerr << "start streaming failed" << std::endl;
         return -1;
@@ -26,6 +33,14 @@ int main(int argc, char **argv)
     bool renderFrame= false;
     bool renderDots = false;
     bool renderTarget = true;
+
+    cv::VideoWriter writer(
+        "output.mp4",
+        cv::VideoWriter::fourcc('m', 'p', '4', 'v'),
+        30,
+        cv::Size(width, height));
+
+    cv::Mat frame;
 
     while (true)
     {
@@ -69,6 +84,8 @@ int main(int argc, char **argv)
                 cv::circle(frame, centerPoint, segmentLength / 4, cv::Scalar(0, 0, 255), 2);
             }
         }
+
+        writer.write(frame);
 
         cv::imshow("Face Detection", frame);
 

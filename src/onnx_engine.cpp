@@ -27,18 +27,12 @@ ONNXEngine::ONNXEngine(const std::string &modelPath)
     : env(ORT_LOGGING_LEVEL_WARNING, "onnx_engine")
 {
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-
-    cuda_options.device_id = 0;
-    session_options.AppendExecutionProvider_CUDA(cuda_options);
-
     session = std::make_unique<Ort::Session>(
         env,
         modelPath.c_str(),
         session_options);
 
     printModelInfo(*session);
-
-    auto providers = Ort::GetAvailableProviders();
 
     Ort::AllocatorWithDefaultOptions allocator;
 
