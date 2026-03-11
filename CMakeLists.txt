@@ -33,12 +33,14 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE
         ${PROJECT_INCLUDE_DIR}
         ${PROJECT_SOURCE_DIR}/third_party/onnxruntime-linux-aarch64-1.24.3/include
+        ${PROJECT_SOURCE_DIR}/third_party/onnxruntime-linux-x64-1.17.1/include
 )
 
 
 target_link_directories(${PROJECT_NAME}
     PRIVATE
     ${PROJECT_SOURCE_DIR}/third_party/onnxruntime-linux-aarch64-1.24.3/lib
+    ${PROJECT_SOURCE_DIR}/third_party/onnxruntime-linux-x64-1.17.1/lib
     )
 
 target_link_libraries(${PROJECT_NAME}
