@@ -4,6 +4,7 @@ build*/
 cmake-build*/
 out/
 bin/
+third_party/
 
 # CMake
 CMakeCache.txt
@@ -32,3 +33,5 @@ compile_commands.json
 *.swp
 *.tgz
 
+*.mp4
+*.json
