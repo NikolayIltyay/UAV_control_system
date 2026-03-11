@@ -87,8 +87,6 @@ int main(int argc, char **argv)
 
         writer.write(frame);
 
-        cv::imshow("Face Detection", frame);
-
         if (cv::waitKey(1) == 27)
             break;
 
