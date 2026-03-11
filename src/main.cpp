@@ -42,6 +42,8 @@ int main(int argc, char **argv)
 
     cv::Mat frame;
 
+    int count =0;
+
     while (true)
     {
         cv::Mat frame = capture->getFrame();
@@ -87,10 +89,11 @@ int main(int argc, char **argv)
 
         writer.write(frame);
 
-        if (cv::waitKey(1) == 27)
+        if (count == 300)
             break;
 
         fpsLog.update();
+        count++;
     }
 
     capture->stopStreaming();
