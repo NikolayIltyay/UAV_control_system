@@ -22,7 +22,7 @@ int CaptureCameraV4L2::startStreaming(const char *dev, unsigned int wdth, unsign
     _fd = open(dev, O_RDWR);
     if (_fd < 0)
     {
-        std::cerr << "open" << std::endl;
+        std::cerr << "Failed to open "<<dev<< " device" << std::endl;
         return -1;
     }
 
