@@ -59,7 +59,6 @@ BlazeFaceModel::BlazeFaceModel(const std::string &modelPath)
 
 std::vector<Detection> BlazeFaceModel::infer(const cv::Mat &image)
 {
-    ScopeTimeLogger timeLogger("BlazeFaceModel::infer");
     int orig_w = image.cols;
     int orig_h = image.rows;
 

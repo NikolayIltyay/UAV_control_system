@@ -2,6 +2,8 @@
 #include <thread>
 #include <atomic>
 #include <csignal>
+#include <sys/syscall.h>
+
 #include <opencv2/opencv.hpp>
 #include "fps_logger.hpp"
 #include "onnx_blaze_face_model.hpp"
@@ -23,6 +25,7 @@ void signalHandler(int)
 
 void captureCamera(const char *dev, unsigned int wdth, unsigned int height)
 {
+    std::cout << "captureCamera TID = " << syscall(SYS_gettid) << std::endl;
     cv::VideoCapture capture;
     capture.open(dev, cv::CAP_V4L2);
     if (!capture.isOpened())
@@ -57,13 +60,17 @@ void captureCamera(const char *dev, unsigned int wdth, unsigned int height)
 
 void inference(const char *model)
 {
+    std::cout << "inference TID = " << syscall(SYS_gettid) << std::endl;
     BlazeFaceModel blazeModel(model);
 
     while (runInference)
     {
         std::shared_ptr<cv::Mat> lastFrame = lastCaptureFrame.exchange(nullptr, std::memory_order_acquire);
         if (!lastFrame)
+        {
+            std::this_thread::sleep_for(std::chrono::duration(std::chrono::milliseconds(1)));
             continue;
+        }         
 
         auto outlines = blazeModel.infer(*lastFrame);
         drawDetections(outlines, *lastFrame);
@@ -74,6 +81,8 @@ void inference(const char *model)
 
 int main(int argc, char **argv)
 {
+    std::cout << "main TID = " << syscall(SYS_gettid) << std::endl;
+
     std::signal(SIGINT, signalHandler);
 
     const auto model = (argc > 2) ? argv[2] : nullptr;
@@ -106,7 +115,10 @@ int main(int argc, char **argv)
     {
         frame = frameToRender.exchange(nullptr, std::memory_order_acquire);
         if (!frame)
+        {
+            std::this_thread::sleep_for(std::chrono::duration(std::chrono::milliseconds(1)));
             continue;
+        }
 
         writer.write(*frame);
         fpsLog.update();

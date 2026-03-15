@@ -24,7 +24,7 @@ namespace
 }
 
 ONNXEngine::ONNXEngine(const std::string &modelPath)
-    : env(ORT_LOGGING_LEVEL_WARNING, "onnx_engine")
+    : env(ORT_LOGGING_LEVEL_ERROR, "onnx_engine")
 {
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     session = std::make_unique<Ort::Session>(
