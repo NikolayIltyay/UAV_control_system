@@ -26,21 +26,17 @@ void signalHandler(int)
 void captureCamera(const char *dev, unsigned int wdth, unsigned int height)
 {
     std::cout << "captureCamera TID = " << syscall(SYS_gettid) << std::endl;
-    cv::VideoCapture capture;
-    capture.open(dev, cv::CAP_V4L2);
+
+   cv::VideoCapture capture(
+    "libcamerasrc ! video/x-raw,format=BGR,width=1280,height=720,framerate=30/1 ! appsink",
+    cv::CAP_GSTREAMER); 
+
+
     if (!capture.isOpened())
     {
-        std::cerr << "Cannot open camera device." << dev << std::endl;
+        std::cerr << "Cannot open camera device " << dev << std::endl;
         return;
     }
-
-    if (!capture.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G')))
-        std::cout << "WARNING: Failed to set format" << std::endl;
-
-    capture.set(cv::CAP_PROP_FRAME_WIDTH, wdth);
-    capture.set(cv::CAP_PROP_FRAME_HEIGHT, height);
-
-    capture.set(cv::CAP_PROP_FPS, 30);
 
     while (runCapture)
     {
@@ -49,7 +45,7 @@ void captureCamera(const char *dev, unsigned int wdth, unsigned int height)
         if (!capture.read(frame))
         {
             std::cout << "Failed to read frame from camera." << std::endl;
-            continue;
+            return;
         }
 
         lastCaptureFrame.store(std::make_shared<cv::Mat>(frame.clone()), std::memory_order_release);
@@ -57,6 +53,7 @@ void captureCamera(const char *dev, unsigned int wdth, unsigned int height)
 
     capture.release();
 }
+
 
 void inference(const char *model)
 {
