@@ -3,6 +3,7 @@
 #include <atomic>
 #include <csignal>
 #include <sys/syscall.h>
+#include <sstream>
 
 #include <opencv2/opencv.hpp>
 #include "fps_logger.hpp"
@@ -23,14 +24,20 @@ void signalHandler(int)
     running = false;
 }
 
-void captureCamera(const char *dev, unsigned int wdth, unsigned int height)
+void captureCamera(const char *dev, unsigned int width, unsigned int height)
 {
     std::cout << "captureCamera TID = " << syscall(SYS_gettid) << std::endl;
 
-   cv::VideoCapture capture(
-    "libcamerasrc ! video/x-raw,format=BGR,width=1280,height=720,framerate=30/1 ! appsink",
-    cv::CAP_GSTREAMER); 
+    std::stringstream ss;
+    ss << "libcamerasrc ! video/x-raw,format=BGR,width=";
+    ss << width;
+    ss << ",height=";
+    ss << height;
+    ss << ",framerate=30/1 ! appsink";
 
+    cv::VideoCapture capture(
+        ss.str(),
+        cv::CAP_GSTREAMER);
 
     if (!capture.isOpened())
     {
