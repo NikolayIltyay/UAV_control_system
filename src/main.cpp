@@ -99,8 +99,8 @@ int main(int argc, char **argv)
 
     auto dev = (argc > 1) ? argv[1] : "/dev/video0";
 
-    unsigned int width = 1280;
-    unsigned int height = 720;
+    unsigned int width = 1920;
+    unsigned int height = 1080;
 
     std::thread captureCameraThread(captureCamera, dev, width, height);
     std::thread inferenceThread(inference, model);
