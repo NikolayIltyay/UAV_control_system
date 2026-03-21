@@ -33,7 +33,7 @@ void captureCamera(const char *dev, unsigned int width, unsigned int height)
     ss << width;
     ss << ",height=";
     ss << height;
-    ss << ",framerate=30/1 ! appsink";
+    ss << ",framerate=200/1 ! appsink";
 
     cv::VideoCapture capture(
         ss.str(),
@@ -99,8 +99,8 @@ int main(int argc, char **argv)
 
     auto dev = (argc > 1) ? argv[1] : "/dev/video0";
 
-    unsigned int width = 1920;
-    unsigned int height = 1080;
+    unsigned int width = 640;
+    unsigned int height = 480;
 
     std::thread captureCameraThread(captureCamera, dev, width, height);
     std::thread inferenceThread(inference, model);
